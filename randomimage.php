@@ -15,6 +15,9 @@ to you index.php or sidebar.php template file where you want the random image to
 
 CHANGELOG
 
+1.1
+fixed bug in posts that have multiple images which prevented any picture but the first to be displayed
+
 1.0
 inital version
 
@@ -68,13 +71,13 @@ function randomimage($show_post_title = true, $number_of_images = 1, $image_attr
         // if there are none, try again, 
         // if there are many choose one at random
         // otherwise, pick the first one
-        if (count($matches) == 0)
+        if (count($matches[0]) == 0)
         {
             continue;
         }
-        elseif (count($matches) > 1)
+        elseif (count($matches[0]) > 1)
         {
-            $num = rand(0, count($matches)-1);
+            $num = rand(0, count($matches[0])-1);
             $image_element = $matches[0][$num];
         }
         else
