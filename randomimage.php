@@ -2,18 +2,27 @@
 
 /*
 Plugin Name: randomimage
-Version: 1.0
+Version: 1.2
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
 Author URI: http://justinsomnia.org/
 
-Save this file as randomimage.php in /path/to/wordpress/wp-content/plugins/ 
-Activate from the Wordpress control panel. 
-Add [?php randomimage(); ?] (replacing the square brackets [] with angle brackets <>)
-to you index.php or sidebar.php template file where you want the random image to appear.
+INSTRUCTIONS
+
+1) Save this file as randomimage.php in /path/to/wordpress/wp-content/plugins/ 
+2) Activate "randomimage" from the Wordpress control panel. 
+3) Add [?php randomimage(); ?] to your index.php or sidebar.php template file
+   in /path/to/wordpress/wp-content/themes/theme-name/ where you want the random image to appear
+   (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+1.2
+fixed src and alt regexes (which would have stopped at first occurence of a single or double quote, regardless of the first delimiter)
+added newlines for prettier printing
+added show_alt_caption option to display alt text as caption below image
+added image_src_regex option to select images using a regular expression based on the image src attribute
 
 1.1
 fixed bug in posts that have multiple images which prevented any picture but the first to be displayed
@@ -45,7 +54,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 
-function randomimage($show_post_title = true, $number_of_images = 1, $image_attributes = "")
+function randomimage($show_post_title  = true, 
+                     $number_of_images = 1, 
+                     $image_attributes = "", 
+                     $show_alt_caption = true, 
+                     $image_src_regex  = "")
 {
     // get access to wordpress' database object
     global $wpdb;
@@ -86,16 +99,23 @@ function randomimage($show_post_title = true, $number_of_images = 1, $image_attr
         }
 
         // grab the src attribute and see if it exists, if not try again
-        preg_match("/src\s*=\s*(\"|\')([^\"']+)/i", $image_element, $image_src);
+        //preg_match("/src\s*=\s*(\"|')([^\"']+)/i", $image_element, $image_src);
+        preg_match("/src\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_src);
         $image_src = $image_src[2];
 
-        //if (substr($image, 0, 7) != "http://" && !file_exists( dirname(__FILE__) . $image_src))
-        //{
-        //    continue;
-        //}
+        if ($image_src == "")
+        {
+            continue;
+        }
 
+        // if a regex is supplied and it doesn't match, try next post
+        if ($image_src_regex != "" && !preg_match("/" . $image_src_regex . "/i", $image_src))
+        {
+            continue;
+        }
+           
         // grab the alt attribute and see if it exists, if not supply default
-        preg_match("/alt\s*=\s*(\"|\')([^\"']+)/i", $image_element, $image_alt);
+        preg_match("/alt\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_alt);
         $image_alt = $image_alt[2];
 
         if ($image_alt == "")
@@ -105,14 +125,27 @@ function randomimage($show_post_title = true, $number_of_images = 1, $image_attr
     
         if ($show_post_title)
         {
-            print "<strong>" . $post_title . "</strong><br/>";
+            print "\n<strong>" . $post_title . "</strong><br />\n";
         }
-        print "<a href='$post_permalink'><img src='$image_src' alt='$image_alt' $image_attributes/></a>";
+
+        print "<a href='$post_permalink'><img src='$image_src' alt='$image_alt' $image_attributes /></a>";
+        
+        if ($show_alt_caption && $image_alt != "random image")
+        {
+            print "<br />\n<em>$image_alt</em>";
+        }
+
         $image_count++;
         
         if ($image_count == $number_of_images)
         {
+            print "\n";
             break;
+        }
+        else
+        {
+            // print a linebreak between each successive image
+            print "<br />\n";
         }
     }
 }
