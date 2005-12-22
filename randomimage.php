@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 1.2
+Version: 1.3
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,10 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+1.3
+no longer selects images from password protected pages
+added post_type option to determine whether to grab images from posts, pages, or both (this prevents pulling images from draft posts)
 
 1.2
 fixed src and alt regexes (which would have stopped at first occurence of a single or double quote, regardless of the first delimiter)
@@ -58,15 +62,37 @@ function randomimage($show_post_title  = true,
                      $number_of_images = 1, 
                      $image_attributes = "", 
                      $show_alt_caption = true, 
-                     $image_src_regex  = "")
+                     $image_src_regex  = "",
+                     $post_type        = "posts")
 {
     // get access to wordpress' database object
     global $wpdb;
 
+    // select the post_type sql for both post pages (post_status = 'static') 
+    // and posts (AND post_status = 'publish')
+    // or for just pages or for just posts (the default)
+    // by adding this where criteria, we also solve the problem
+    // of accidentally including images from draft posts.
+    if ($post_type == "both")
+    {
+        $post_type_sql = "AND (post_status = 'publish' OR post_status = 'static')";
+    }
+    else if ($post_type == "pages")
+    {
+        $post_type_sql = "AND post_status = 'static'";
+    }
+    else
+    {
+        $post_type_sql = "AND post_status = 'publish'";
+    }
+
     // query records that contain img tags, ordered randomly
+    // do not select images from password protected posts
     $sql = "SELECT * 
             FROM $wpdb->posts 
             WHERE post_content LIKE '%<img%'
+            AND post_password = ''
+            $post_type_sql
             ORDER BY rand()";
     $resultset = mysql_query($sql) or die($sql);
 
@@ -99,7 +125,6 @@ function randomimage($show_post_title  = true,
         }
 
         // grab the src attribute and see if it exists, if not try again
-        //preg_match("/src\s*=\s*(\"|')([^\"']+)/i", $image_element, $image_src);
         preg_match("/src\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_src);
         $image_src = $image_src[2];
 
