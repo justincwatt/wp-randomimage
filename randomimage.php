@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 1.3
+Version: 1.4
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,10 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+1.4
+prevent displaying the same image twice
+added inter_image_html option (<br /><br /> by default)
 
 1.3
 no longer selects images from password protected pages
@@ -37,7 +41,7 @@ inital version
 LICENSE
 
 randomimage.php
-Copyright (C) 2005 Justin Watt
+Copyright (C) 2006 Justin Watt
 justincwatt@gmail.com
 http://justinsomnia.org/
 
@@ -63,7 +67,8 @@ function randomimage($show_post_title  = true,
                      $image_attributes = "", 
                      $show_alt_caption = true, 
                      $image_src_regex  = "",
-                     $post_type        = "posts")
+                     $post_type        = "posts",
+                     $inter_image_html = "<br /><br />")
 {
     // get access to wordpress' database object
     global $wpdb;
@@ -95,6 +100,9 @@ function randomimage($show_post_title  = true,
             $post_type_sql
             ORDER BY rand()";
     $resultset = mysql_query($sql) or die($sql);
+
+    // keep track of multiple images to prevent displaying dups
+    $image_srcs = array();
 
     // loop through database results one at a time
     $image_count = 0;
@@ -128,7 +136,7 @@ function randomimage($show_post_title  = true,
         preg_match("/src\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_src);
         $image_src = $image_src[2];
 
-        if ($image_src == "")
+        if ($image_src == "" || in_array($image_src, $image_srcs))
         {
             continue;
         }
@@ -138,6 +146,9 @@ function randomimage($show_post_title  = true,
         {
             continue;
         }
+
+        // add img src to array to check for dups
+        $image_srcs[] = $image_src;
            
         // grab the alt attribute and see if it exists, if not supply default
         preg_match("/alt\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_alt);
@@ -170,7 +181,7 @@ function randomimage($show_post_title  = true,
         else
         {
             // print a linebreak between each successive image
-            print "<br />\n";
+            print "$inter_image_html\n";
         }
     }
 }
