@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 2.1
+Version: 3.0
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,10 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+3.0
+added option to specify sort order: random (default) or reverse chronological (recent)
+revised how configuration options are initialized
 
 2.1
 added the ability to selectively filter images by post category
@@ -83,28 +87,47 @@ function get_randomimage_options()
 {
     $randomimage_options = get_option('randomimage_options');
 
-    // for forward compatibility, make sure new category_filter option gets set as an array
-    if (isset($randomimage_options) && !isset($randomimage_options["category_filter"]))
-    {
+    // init default options if options aren't set
+    if (!isset($randomimage_options["show_post_title"])) {
+        $randomimage_options["show_post_title"] = true;
+    }
+    
+    if (!isset($randomimage_options["show_alt_caption"])) {
+        $randomimage_options["show_alt_caption"] = true;
+    }
+    
+    if (!isset($randomimage_options["show_images_in_posts"])) {
+        $randomimage_options["show_images_in_posts"] = true;
+    }
+    
+    if (!isset($randomimage_options["show_images_in_pages"])) {
+        $randomimage_options["show_images_in_pages"] = false;
+    }
+    
+    if (!isset($randomimage_options["number_of_images"])) {
+        $randomimage_options["number_of_images"] = 1;
+    }
+    
+    if (!isset($randomimage_options["image_attributes"])) {
+        $randomimage_options["image_attributes"] = "";
+    }
+    
+    if (!isset($randomimage_options["inter_image_html"])) {
+        $randomimage_options["inter_image_html"] = "<br /><br />";
+    }
+    
+    if (!isset($randomimage_options["image_src_regex"])) {
+        $randomimage_options["image_src_regex"] = "";
+    }
+
+    if (!isset($randomimage_options["category_filter"])) {
         $randomimage_options["category_filter"] = array();
-        add_option('randomimage_options', $randomimage_options);
     }
 
-    // init default options if options aren't found
-    if (!$randomimage_options) 
-    {
-        $randomimage_options = array("show_post_title"      => true,
-                                     "show_alt_caption"     => true,
-                                     "show_images_in_posts" => true,
-                                     "show_images_in_pages" => false,
-                                     "number_of_images"     => 1, 
-                                     "image_attributes"     => "", 
-                                     "inter_image_html"     => "<br /><br />",
-                                     "image_src_regex"      => "",
-                                     "category_filter"      => array());
-        add_option('randomimage_options', $randomimage_options);
-    }
-
+    if (!isset($randomimage_options["sort_images_randomly"])) {
+        $randomimage_options["sort_images_randomly"] = true;
+    }                             
+    add_option('randomimage_options', $randomimage_options);
     return $randomimage_options;
 }
 
@@ -113,10 +136,17 @@ function get_randomimage_options()
 function randomimage_configuration_page()
 {
     $randomimage_options = get_randomimage_options();
-
+    
     // if form has been submitted, save values
     if ( isset($_POST['submit']) )
     {
+        // booleanize all the checkboxes
+        isset($_POST['show_post_title'])      ? $_POST['show_post_title']      = true : $_POST['show_post_title']      = false;
+        isset($_POST['show_alt_caption'])     ? $_POST['show_alt_caption']     = true : $_POST['show_alt_caption']     = false;
+        isset($_POST['show_images_in_posts']) ? $_POST['show_images_in_posts'] = true : $_POST['show_images_in_posts'] = false;
+        isset($_POST['show_images_in_pages']) ? $_POST['show_images_in_pages'] = true : $_POST['show_images_in_pages'] = false;
+        isset($_POST['sort_images_randomly']) ? $_POST['sort_images_randomly'] = true : $_POST['sort_images_randomly'] = false;
+        
         // correct for empty image number
         if ($_POST['number_of_images'] < 1)
         {
@@ -124,9 +154,9 @@ function randomimage_configuration_page()
         }
 
         // correct for posts and pages being deselected
-        if (!isset($_POST['show_images_in_posts']) && !isset($_POST['show_images_in_pages']))
+        if (!$_POST['show_images_in_posts'] && !$_POST['show_images_in_pages'])
         {
-            $_POST['show_images_in_posts'] = "on";
+            $_POST['show_images_in_posts'] = true;
         }
 
         if (!is_array($_POST['category_filter']))
@@ -144,7 +174,8 @@ function randomimage_configuration_page()
             "image_attributes"     => stripslashes($_POST['image_attributes']),
             "inter_image_html"     => stripslashes($_POST['inter_image_html']),
             "image_src_regex"      => stripslashes($_POST['image_src_regex']),
-            "category_filter"      => $_POST['category_filter']
+            "category_filter"      => $_POST['category_filter'],
+            "sort_images_randomly" => $_POST['sort_images_randomly']
         );
         update_option('randomimage_options', $randomimage_options);
     }
@@ -160,22 +191,27 @@ function randomimage_configuration_page()
 
 <div style="clear: both;padding-top:10px;">
 <label style="float:left;width:250px;text-align:right;padding-right:6px;" for="show_post_title">Show post title above image?</label>
-<div style="float:left;"><input type="checkbox" id="show_post_title" name="show_post_title" <?php if (isset($randomimage_options["show_post_title"])) print "checked='on'"; ?>/>&nbsp;&nbsp;<label for="show_alt_caption">Show <code>alt</code> text below?</label> <input type="checkbox" id="show_alt_caption" name="show_alt_caption" <?php if (isset($randomimage_options["show_alt_caption"])) print "checked='on'"; ?>/> </div>
+<div style="float:left;"><input type="checkbox" id="show_post_title" name="show_post_title" <?php if ($randomimage_options["show_post_title"]) print "checked='on'"; ?>/>&nbsp;&nbsp;<label for="show_alt_caption">Show <code>alt</code> text below?</label> <input type="checkbox" id="show_alt_caption" name="show_alt_caption" <?php if ($randomimage_options["show_alt_caption"]) print "checked='on'"; ?>/> </div>
 </div>
 
 <div style="clear: both;padding-top:10px;">
 <label style="float:left;width:250px;text-align:right;padding-right:6px;" for="show_images_in_posts">Include images from WordPress posts?</label>
-<div style="float:left;"><input type="checkbox" id="show_images_in_posts" name="show_images_in_posts" <?php if (isset($randomimage_options["show_images_in_posts"])) print "checked='on'"; ?>/>&nbsp;&nbsp;<label for="show_images_in_pages">Pages?</label> <input type="checkbox" id="show_images_in_pages" name="show_images_in_pages" <?php if (isset($randomimage_options["show_images_in_pages"])) print "checked='on'"; ?>/><br /></div>
+<div style="float:left;"><input type="checkbox" id="show_images_in_posts" name="show_images_in_posts" <?php if ($randomimage_options["show_images_in_posts"]) print "checked='on'"; ?>/>&nbsp;&nbsp;<label for="show_images_in_pages">Pages?</label> <input type="checkbox" id="show_images_in_pages" name="show_images_in_pages" <?php if ($randomimage_options["show_images_in_pages"]) print "checked='on'"; ?>/><br /></div>
+</div>
+
+<div style="clear: both;padding-top:10px;">
+<label style="float:left;width:250px;text-align:right;padding-right:6px;" for="sort_images_randomly">Sort Images Randomly?</label>
+<div style="float:left;"><input type="checkbox" id="sort_images_randomly" name="sort_images_randomly" <?php if ($randomimage_options["sort_images_randomly"]) print "checked='on'"; ?>/> Uncheck if you want to show recent images rather than random images<br /></div>
 </div>
 
 <div style="clear: both;padding-top:10px;">
 <label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="number_of_images">How many images to display?</label>
-<div style="float:left;"><input type="text" id="number_of_images" name="number_of_images" size="1" maxlength="2" <?php if (isset($randomimage_options["number_of_images"])) print "value='" . $randomimage_options["number_of_images"] . "'"; ?>/>&nbsp;&nbsp;<label for="inter_image_html">HTML between images:</label> <input type="text" id="inter_image_html" name="inter_image_html" size="12" <?php if (isset($randomimage_options["inter_image_html"])) print "value='" . stripslashes(htmlspecialchars($randomimage_options["inter_image_html"], ENT_QUOTES)) . "'"; ?>/>  e.g. <code>&lt;br /&gt;&lt;br /&gt;</code></div>
+<div style="float:left;"><input type="text" id="number_of_images" name="number_of_images" size="1" maxlength="2" <?php if ($randomimage_options["number_of_images"]) print "value='" . $randomimage_options["number_of_images"] . "'"; ?>/>&nbsp;&nbsp;<label for="inter_image_html">HTML between images:</label> <input type="text" id="inter_image_html" name="inter_image_html" size="12" <?php if (isset($randomimage_options["inter_image_html"])) print "value='" . stripslashes(htmlspecialchars($randomimage_options["inter_image_html"], ENT_QUOTES)) . "'"; ?>/>  e.g. <code>&lt;br /&gt;&lt;br /&gt;</code></div>
 </div>
 
 <div style="clear: both;padding-top:10px;">
 <label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="image_attributes">Optional attributes for each <code>&lt;img&gt;</code> tag:</label>
-<div style="float:left;"><input type="text" id="image_attributes" name="image_attributes"  style="width:200px;" <?php if (isset($randomimage_options["image_attributes"])) print "value='" . stripslashes(htmlspecialchars($randomimage_options["image_attributes"], ENT_QUOTES)) . "'"; ?>/> e.g. <code>style="width:200px;"</code></div>
+<div style="float:left;"><input type="text" id="image_attributes" name="image_attributes"  style="width:200px;" <?php if ($randomimage_options["image_attributes"]) print "value='" . stripslashes(htmlspecialchars($randomimage_options["image_attributes"], ENT_QUOTES)) . "'"; ?>/> e.g. <code>style="width:200px;"</code></div>
 </div>
 
 <div style="clear: both;padding-top:10px;">
@@ -201,7 +237,7 @@ function randomimage_configuration_page()
 
 <div style="clear: both;padding-top:10px;">
 <label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="image_src_regex">Regex to match against the <code>&lt;img&gt;</code> <code>src</code>:</label>
-<div style="float:left;"><input type="text" id="image_src_regex" name="image_src_regex" style="width:200px;" <?php if (isset($randomimage_options["image_src_regex"])) print "value='" . stripslashes(htmlspecialchars($randomimage_options["image_src_regex"], ENT_QUOTES)) . "'"; ?>/> e.g. <code>images</code></div>
+<div style="float:left;"><input type="text" id="image_src_regex" name="image_src_regex" style="width:200px;" <?php if ($randomimage_options["image_src_regex"]) print "value='" . stripslashes(htmlspecialchars($randomimage_options["image_src_regex"], ENT_QUOTES)) . "'"; ?>/> e.g. <code>images</code></div>
 </div>
 
 <div style="clear: both;padding-top:10px;text-align:center;">
@@ -231,7 +267,8 @@ function randomimage($show_post_title  = true,
                      $image_src_regex  = "",
                      $post_type        = "posts",
                      $inter_image_html = "<br /><br />",
-                     $category_filter  = "")
+                     $category_filter  = "",
+                     $sort_images_randomly = true)
 {
     // get access to wordpress' database object
     global $wpdb;
@@ -242,12 +279,13 @@ function randomimage($show_post_title  = true,
     {
         $randomimage_options = get_randomimage_options();
 
-        $show_post_title  = $randomimage_options['show_post_title'];        
-        $number_of_images = $randomimage_options['number_of_images'];        
-        $image_attributes = $randomimage_options['image_attributes'];        
-        $show_alt_caption = $randomimage_options['show_alt_caption'];        
-        $image_src_regex  = $randomimage_options['image_src_regex'];        
-        $inter_image_html = $randomimage_options['inter_image_html'];
+        $show_post_title      = $randomimage_options['show_post_title'];        
+        $number_of_images     = $randomimage_options['number_of_images'];        
+        $image_attributes     = $randomimage_options['image_attributes'];        
+        $show_alt_caption     = $randomimage_options['show_alt_caption'];        
+        $image_src_regex      = $randomimage_options['image_src_regex'];        
+        $inter_image_html     = $randomimage_options['inter_image_html'];
+        $sort_images_randomly = $randomimage_options['sort_images_randomly'];
 
         if (!is_array($randomimage_options['category_filter']))
         {
@@ -303,6 +341,17 @@ function randomimage($show_post_title  = true,
         $category_filter_sql   = "";
         $category_filter_group = "";
     }
+    
+    // by default we sort images randomly,
+    // but we can also sort them in descending date order
+    if ($sort_images_randomly)
+    {
+        $order_by_sql = "rand()";
+    }
+    else
+    {
+        $order_by_sql = "$wpdb->posts.post_date DESC";
+    }
 
     // query records that contain img tags, ordered randomly
     // do not select images from password protected posts
@@ -314,13 +363,13 @@ function randomimage($show_post_title  = true,
             $post_type_sql
             $category_filter_sql
             $category_filter_group
-            ORDER BY rand()";
+            ORDER BY $order_by_sql";
     $resultset = mysql_query($sql) or die($sql);
 
     // keep track of multiple images to prevent displaying dups
     $image_srcs = array();
 
-    // loop through database results one at a time
+    // loop through each applicable post from the database
     $image_count = 0;
     while ($row = mysql_fetch_array($resultset))
     {
@@ -332,75 +381,87 @@ function randomimage($show_post_title  = true,
         preg_match_all("/<img[^>]+>/i", $post_content, $matches);
 
         // if there are none, try again, 
-        // if there are many choose one at random
-        // otherwise, pick the first one
         if (count($matches[0]) == 0)
         {
             continue;
         }
-        elseif (count($matches[0]) > 1)
-        {
-            $num = rand(0, count($matches[0])-1);
-            $image_element = $matches[0][$num];
-        }
         else
         {
-            $image_element = $matches[0][0];
-        }
-
-        // grab the src attribute and see if it exists, if not try again
-        preg_match("/src\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_src);
-        $image_src = $image_src[2];
-
-        if ($image_src == "" || in_array($image_src, $image_srcs))
-        {
-            continue;
-        }
-
-        // if a regex is supplied and it doesn't match, try next post
-        if ($image_src_regex != "" && !preg_match("/" . $image_src_regex . "/i", $image_src))
-        {
-            continue;
-        }
-
-        // add img src to array to check for dups
-        $image_srcs[] = $image_src;
-           
-        // grab the alt attribute and see if it exists, if not supply default
-        preg_match("/alt\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_alt);
-        $image_alt = $image_alt[2];
-
-        if ($image_alt == "")
-        {
-            $image_alt = "random image";
-        }
-    
-        if ($show_post_title)
-        {
-            print "\n<strong>" . $post_title . "</strong><br />\n";
-        }
-
-        print "<a href='$post_permalink'><img src='$image_src' alt='$image_alt' $image_attributes /></a>";
+            if ($sort_images_randomly)
+            {
+                // if there are multiple images in a single post, choose one at random
+                // otherwise, pick the first one
+                if (count($matches[0]) > 1)
+                {
+                    $num = rand(0, count($matches[0])-1);
+                    $image_elements = array($matches[0][$num]);
+                }
+                else
+                {
+                    $image_elements = array($matches[0][0]);
+                }           
+            }
+            else
+            {
+                $image_elements = $matches[0];
+            }
         
-        if ($show_alt_caption && $image_alt != "random image")
-        {
-            print "<br />\n<em>$image_alt</em>";
         }
-
-        $image_count++;
         
-        if ($image_count == $number_of_images)
+        foreach ($image_elements as $image_element)
         {
-            print "\n";
-            break;
-        }
-        else
-        {
-            // print a linebreak between each successive image
-            print "$inter_image_html\n";
+            // grab the src attribute and see if it exists, if not try again
+            preg_match("/src\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_src);
+            $image_src = $image_src[2];
+
+            if ($image_src == "" || in_array($image_src, $image_srcs))
+            {
+                continue;
+            }
+
+            // if a regex is supplied and it doesn't match, try next post
+            if ($image_src_regex != "" && !preg_match("/" . $image_src_regex . "/i", $image_src))
+            {
+                continue;
+            }
+
+            // add img src to array to check for dups
+            $image_srcs[] = $image_src;
+               
+            // grab the alt attribute and see if it exists, if not supply default
+            preg_match("/alt\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_alt);
+            $image_alt = $image_alt[2];
+
+            if ($image_alt == "")
+            {
+                $image_alt = "random image";
+            }
+        
+            if ($show_post_title)
+            {
+                print "\n<strong>" . $post_title . "</strong><br />\n";
+            }
+
+            print "<a href='$post_permalink'><img src='$image_src' alt='$image_alt' $image_attributes /></a>";
+            
+            if ($show_alt_caption && $image_alt != "random image")
+            {
+                print "<br />\n<em>$image_alt</em>";
+            }
+
+            $image_count++;
+            
+            if ($image_count == $number_of_images)
+            {
+                print "\n";
+                return;
+            }
+            else
+            {
+                // print a linebreak between each successive image
+                print "$inter_image_html\n";
+            }
         }
     }
 }
-
-
 ?>
