@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 3.0
+Version: 3.1
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,9 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+3.1
+changed recent image behavior to only show one randomly selected image per post (instead of every image in a post)
 
 3.0
 added option to specify sort order: random (default) or reverse chronological (recent)
@@ -387,25 +390,17 @@ function randomimage($show_post_title  = true,
         }
         else
         {
-            if ($sort_images_randomly)
+            // if there are multiple images in a single post, choose one at random
+            // otherwise, pick the first one
+            if (count($matches[0]) > 1)
             {
-                // if there are multiple images in a single post, choose one at random
-                // otherwise, pick the first one
-                if (count($matches[0]) > 1)
-                {
-                    $num = rand(0, count($matches[0])-1);
-                    $image_elements = array($matches[0][$num]);
-                }
-                else
-                {
-                    $image_elements = array($matches[0][0]);
-                }           
+                $num = rand(0, count($matches[0])-1);
+                $image_elements = array($matches[0][$num]);
             }
             else
             {
-                $image_elements = $matches[0];
+                $image_elements = array($matches[0][0]);
             }
-        
         }
         
         foreach ($image_elements as $image_element)
