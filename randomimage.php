@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 3.1
+Version: 3.2
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,10 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+3.2
+fixed bug that might cause no image to be displayed when using regex to exclude a frequently occuring image among a small set of posts 
+(thanks to iSynth of http://www.synthdicate.com/ for pointing this out)
 
 3.1
 changed recent image behavior to only show one randomly selected image per post (instead of every image in a post)
@@ -388,27 +392,18 @@ function randomimage($show_post_title  = true,
         {
             continue;
         }
-        else
-        {
-            // if there are multiple images in a single post, choose one at random
-            // otherwise, pick the first one
-            if (count($matches[0]) > 1)
-            {
-                $num = rand(0, count($matches[0])-1);
-                $image_elements = array($matches[0][$num]);
-            }
-            else
-            {
-                $image_elements = array($matches[0][0]);
-            }
-        }
-        
-        foreach ($image_elements as $image_element)
+
+        // randomize the array of images in this post
+        shuffle($matches[0]);
+
+        // loop through each image candidate for this post and try to find a winner        
+        foreach ($matches[0] as $image_element)
         {
             // grab the src attribute and see if it exists, if not try again
             preg_match("/src\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_src);
             $image_src = $image_src[2];
-
+            
+            // make sure we haven't displayed this image before
             if ($image_src == "" || in_array($image_src, $image_srcs))
             {
                 continue;
@@ -456,6 +451,12 @@ function randomimage($show_post_title  = true,
                 // print a linebreak between each successive image
                 print "$inter_image_html\n";
             }
+            
+            // leave the foreach loop and look for images
+            // in other posts
+            // TODO: if people wanted to display multiple images per post,
+            // we would selectively skip this break
+            break;
         }
     }
 }
