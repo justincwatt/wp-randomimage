@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 3.2
+Version: 3.3
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,9 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+3.3
+updated for WordPress 2.1's new post_type field (still works for < 2.1)
 
 3.2
 fixed bug that might cause no image to be displayed when using regex to exclude a frequently occuring image among a small set of posts 
@@ -278,7 +281,7 @@ function randomimage($show_post_title  = true,
                      $sort_images_randomly = true)
 {
     // get access to wordpress' database object
-    global $wpdb;
+    global $wpdb, $wp_version;
 
     // if no arguments are specified
     // assume we're going with the configuration options
@@ -321,19 +324,33 @@ function randomimage($show_post_title  = true,
     // or for just pages or for just posts (the default)
     // by adding this where criteria, we also solve the problem
     // of accidentally including images from draft posts.
-    if ($post_type == "both")
-    {
-        $post_type_sql = "AND (post_status = 'publish' OR post_status = 'static')";
+    if ($wp_version < '2.1') {
+        if ($post_type == "both")
+        {
+            $post_type_sql = "AND (post_status = 'publish' OR post_status = 'static')";
+        }
+        else if ($post_type == "pages")
+        {
+            $post_type_sql = "AND post_status = 'static'";
+        }
+        else
+        {
+            $post_type_sql = "AND post_status = 'publish'";
+        }
+    } else {
+        if ($post_type == 'both')
+	{
+	    $post_type_sql = "AND post_status = 'publish' AND post_type in ('post', 'page')";
+	}
+	elseif ($post_type == 'pages')
+	{
+	    $post_type_sql = "AND post_status = 'publish' AND post_type = 'page'";
+	}
+	else
+	{
+            $post_type_sql = "AND post_status = 'publish' AND post_type = 'post'";
+	}
     }
-    else if ($post_type == "pages")
-    {
-        $post_type_sql = "AND post_status = 'static'";
-    }
-    else
-    {
-        $post_type_sql = "AND post_status = 'publish'";
-    }
-
     // assuming $category_filter is a comma separated list of category ids,
     // modify query to join with post2cat table to select from only the chosen categories
     if ($category_filter != "")
