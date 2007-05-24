@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 3.3
+Version: 3.3.1
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,10 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+3.3.1
+added option to spit out debugging info
+directly specified mysql resource $link_identifier in mysql_query
 
 3.3
 updated for WordPress 2.1's new post_type field (still works for < 2.1)
@@ -62,7 +66,7 @@ inital version
 LICENSE
 
 randomimage.php
-Copyright (C) 2006 Justin Watt
+Copyright (C) 2007 Justin Watt
 justincwatt@gmail.com
 http://justinsomnia.org/
 
@@ -270,23 +274,29 @@ function randomimage_configuration_page()
 
 
 
-function randomimage($show_post_title  = true, 
-                     $number_of_images = 1, 
-                     $image_attributes = "", 
-                     $show_alt_caption = true, 
-                     $image_src_regex  = "",
-                     $post_type        = "posts",
-                     $inter_image_html = "<br /><br />",
-                     $category_filter  = "",
+function randomimage($show_post_title      = true, 
+                     $number_of_images     = 1, 
+                     $image_attributes     = "", 
+                     $show_alt_caption     = true, 
+                     $image_src_regex      = "",
+                     $post_type            = "posts",
+                     $inter_image_html     = "<br /><br />",
+                     $category_filter      = "",
                      $sort_images_randomly = true)
 {
     // get access to wordpress' database object
     global $wpdb, $wp_version;
+    $debugging = false;
+
+
+    if ($debugging) print "<strong>Random Image Debugging is On!</strong><br/>";
 
     // if no arguments are specified
     // assume we're going with the configuration options
     if (!func_get_args())
     {
+        if ($debugging) print "Configuration options (specified via admin interface):<br />";
+
         $randomimage_options = get_randomimage_options();
 
         $show_post_title      = $randomimage_options['show_post_title'];        
@@ -311,12 +321,29 @@ function randomimage($show_post_title  = true,
         }
         elseif ($randomimage_options['show_images_in_posts'] == false && $randomimage_options['show_images_in_pages'] == true)
         {
-             $post_type = "pages";
+            $post_type = "pages";
         }
         else
         {
-             $post_type = "both";
+            $post_type = "both";
         }
+    } 
+    else 
+    {
+        if ($debugging) print "Configuration options (specified via function parameters):<br />";
+    }
+    
+    if ($debugging) 
+    {
+        print "show_post_title: "      . htmlspecialchars($show_post_title)      . "<br/>";     
+        print "number_of_images: "     . htmlspecialchars($number_of_images)     . "<br/>";    
+        print "image_attributes: "     . htmlspecialchars($image_attributes)     . "<br/>";    
+        print "show_alt_caption: "     . htmlspecialchars($show_alt_caption)     . "<br/>";    
+        print "image_src_regex:  "     . htmlspecialchars($image_src_regex)      . "<br/>";     
+        print "post_type: "            . htmlspecialchars($post_type)            . "<br/>";           
+        print "inter_image_html: "     . htmlspecialchars($inter_image_html)     . "<br/>";    
+        print "category_filter: "      . htmlspecialchars($category_filter)      . "<br/>";     
+        print "sort_images_randomly: " . htmlspecialchars($sort_images_randomly) . "<br/><br/>";
     }
 
     // select the post_type sql for both post pages (post_status = 'static') 
@@ -324,7 +351,8 @@ function randomimage($show_post_title  = true,
     // or for just pages or for just posts (the default)
     // by adding this where criteria, we also solve the problem
     // of accidentally including images from draft posts.
-    if ($wp_version < '2.1') {
+    if ($wp_version < '2.1') 
+    {
         if ($post_type == "both")
         {
             $post_type_sql = "AND (post_status = 'publish' OR post_status = 'static')";
@@ -337,19 +365,21 @@ function randomimage($show_post_title  = true,
         {
             $post_type_sql = "AND post_status = 'publish'";
         }
-    } else {
+    } 
+    else 
+    {
         if ($post_type == 'both')
-	{
-	    $post_type_sql = "AND post_status = 'publish' AND post_type in ('post', 'page')";
-	}
-	elseif ($post_type == 'pages')
-	{
-	    $post_type_sql = "AND post_status = 'publish' AND post_type = 'page'";
-	}
-	else
-	{
+        {
+            $post_type_sql = "AND post_status = 'publish' AND post_type in ('post', 'page')";
+        }
+        elseif ($post_type == 'pages')
+        {
+            $post_type_sql = "AND post_status = 'publish' AND post_type = 'page'";
+        }
+        else
+        {
             $post_type_sql = "AND post_status = 'publish' AND post_type = 'post'";
-	}
+        }
     }
     // assuming $category_filter is a comma separated list of category ids,
     // modify query to join with post2cat table to select from only the chosen categories
@@ -388,8 +418,11 @@ function randomimage($show_post_title  = true,
             $category_filter_sql
             $category_filter_group
             ORDER BY $order_by_sql";
-    $resultset = mysql_query($sql) or die($sql);
-
+    $resultset = @mysql_query($sql, $wpdb->dbh);
+    
+    if ($debugging) print "mysql errors: " . mysql_error($wpdb->dbh) . "<br/> SQL: " . htmlspecialchars($sql) . "<br/>";;
+    if ($debugging) print "elligible post count: " . @mysql_num_rows($resultset) . "<br/>"; 
+    
     // keep track of multiple images to prevent displaying dups
     $image_srcs = array();
 
