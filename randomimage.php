@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 3.3.1
+Version: 4.0
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,10 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+4.0
+converted html around each image to a template, allowing customization of caption and title position and markup
+added ability to only select images that have a specific class attribute
 
 3.3.1
 added option to spit out debugging info
@@ -101,15 +105,32 @@ function get_randomimage_options()
 {
     $randomimage_options = get_option('randomimage_options');
 
-    // init default options if options aren't set
-    if (!isset($randomimage_options["show_post_title"])) {
-        $randomimage_options["show_post_title"] = true;
+    if (!isset($randomimage_options["image_template_html"]) || $randomimage_options["image_template_html"] == '') {
+
+        if (isset($randomimage_options["show_post_title"]) || isset($randomimage_options["show_alt_caption"])) {
+            // lets upgrade from v3
+            $upgraded_template = '';
+            if ($randomimage_options["show_post_title"] === true) {
+                $upgraded_template .= "\n<strong>%1</strong><br />\n";
+            }
+
+            $upgraded_template .= "%2";
+
+            if ($randomimage_options["show_alt_caption"] === true) {
+                $upgraded_template .= "<br />\n<em>%3</em>\n";
+            }
+
+            $randomimage_options["image_template_html"] = $upgraded_template;
+            
+            unset($randomimage_options["show_post_title"]);
+            unset($randomimage_options["show_alt_caption"]);
+
+        } else {
+            $randomimage_options["image_template_html"] = "\n<strong>%1</strong><br />\n%2<br />\n<em>%3</em>\n";
+        }
     }
-    
-    if (!isset($randomimage_options["show_alt_caption"])) {
-        $randomimage_options["show_alt_caption"] = true;
-    }
-    
+
+    // init default options if options aren't set    
     if (!isset($randomimage_options["show_images_in_posts"])) {
         $randomimage_options["show_images_in_posts"] = true;
     }
@@ -140,7 +161,12 @@ function get_randomimage_options()
 
     if (!isset($randomimage_options["sort_images_randomly"])) {
         $randomimage_options["sort_images_randomly"] = true;
-    }                             
+    }
+
+    if (!isset($randomimage_options["image_class_match"])) {
+        $randomimage_options["image_class_match"] = "";
+    } 
+
     add_option('randomimage_options', $randomimage_options);
     return $randomimage_options;
 }
@@ -152,11 +178,9 @@ function randomimage_configuration_page()
     $randomimage_options = get_randomimage_options();
     
     // if form has been submitted, save values
-    if ( isset($_POST['submit']) )
+    if (isset($_POST['submit']))
     {
         // booleanize all the checkboxes
-        isset($_POST['show_post_title'])      ? $_POST['show_post_title']      = true : $_POST['show_post_title']      = false;
-        isset($_POST['show_alt_caption'])     ? $_POST['show_alt_caption']     = true : $_POST['show_alt_caption']     = false;
         isset($_POST['show_images_in_posts']) ? $_POST['show_images_in_posts'] = true : $_POST['show_images_in_posts'] = false;
         isset($_POST['show_images_in_pages']) ? $_POST['show_images_in_pages'] = true : $_POST['show_images_in_pages'] = false;
         isset($_POST['sort_images_randomly']) ? $_POST['sort_images_randomly'] = true : $_POST['sort_images_randomly'] = false;
@@ -178,10 +202,13 @@ function randomimage_configuration_page()
             $_POST['category_filter'] = array();
         }
 
+        if (trim($_POST['image_template_html']) == '') 
+        {
+            $_POST['image_template_html'] = "\n<strong>%1</strong><br />\n%2<br />\n<em>%3</em>\n";
+        }
+
         // create array of new options
         $randomimage_options = array(
-            "show_post_title"      => $_POST['show_post_title'],
-            "show_alt_caption"     => $_POST['show_alt_caption'],
             "show_images_in_posts" => $_POST['show_images_in_posts'],
             "show_images_in_pages" => $_POST['show_images_in_pages'],
             "number_of_images"     => $_POST['number_of_images'],
@@ -189,7 +216,9 @@ function randomimage_configuration_page()
             "inter_image_html"     => stripslashes($_POST['inter_image_html']),
             "image_src_regex"      => stripslashes($_POST['image_src_regex']),
             "category_filter"      => $_POST['category_filter'],
-            "sort_images_randomly" => $_POST['sort_images_randomly']
+            "sort_images_randomly" => $_POST['sort_images_randomly'],
+            "image_class_match"    => stripslashes(trim($_POST['image_class_match'])),
+            "image_template_html"  => stripslashes($_POST['image_template_html'])
         );
         update_option('randomimage_options', $randomimage_options);
     }
@@ -204,11 +233,6 @@ function randomimage_configuration_page()
 <p><strong>Instructions:</strong> Use the following options to configure how you want the Random Image plugin to appear. The sample image below will reflect the changes you make. When you're satisfied, add <code>&lt?php randomimage(); ?&gt</code> to your index.php or sidebar.php template file located in /<em>path</em>/<em>to</em>/<em>wordpress</em>/wp-content/themes/<em>theme-name</em>/
 
 <div style="clear: both;padding-top:10px;">
-<label style="float:left;width:250px;text-align:right;padding-right:6px;" for="show_post_title">Show post title above image?</label>
-<div style="float:left;"><input type="checkbox" id="show_post_title" name="show_post_title" <?php if ($randomimage_options["show_post_title"]) print "checked='on'"; ?>/>&nbsp;&nbsp;<label for="show_alt_caption">Show <code>alt</code> text below?</label> <input type="checkbox" id="show_alt_caption" name="show_alt_caption" <?php if ($randomimage_options["show_alt_caption"]) print "checked='on'"; ?>/> </div>
-</div>
-
-<div style="clear: both;padding-top:10px;">
 <label style="float:left;width:250px;text-align:right;padding-right:6px;" for="show_images_in_posts">Include images from WordPress posts?</label>
 <div style="float:left;"><input type="checkbox" id="show_images_in_posts" name="show_images_in_posts" <?php if ($randomimage_options["show_images_in_posts"]) print "checked='on'"; ?>/>&nbsp;&nbsp;<label for="show_images_in_pages">Pages?</label> <input type="checkbox" id="show_images_in_pages" name="show_images_in_pages" <?php if ($randomimage_options["show_images_in_pages"]) print "checked='on'"; ?>/><br /></div>
 </div>
@@ -220,11 +244,21 @@ function randomimage_configuration_page()
 
 <div style="clear: both;padding-top:10px;">
 <label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="number_of_images">How many images to display?</label>
-<div style="float:left;"><input type="text" id="number_of_images" name="number_of_images" size="1" maxlength="2" <?php if ($randomimage_options["number_of_images"]) print "value='" . $randomimage_options["number_of_images"] . "'"; ?>/>&nbsp;&nbsp;<label for="inter_image_html">HTML between images:</label> <input type="text" id="inter_image_html" name="inter_image_html" size="12" <?php if (isset($randomimage_options["inter_image_html"])) print "value='" . stripslashes(htmlspecialchars($randomimage_options["inter_image_html"], ENT_QUOTES)) . "'"; ?>/>  e.g. <code>&lt;br /&gt;&lt;br /&gt;</code></div>
+<div style="float:left;"><input type="text" id="number_of_images" name="number_of_images" size="1" maxlength="2" <?php if ($randomimage_options["number_of_images"]) print "value='" . $randomimage_options["number_of_images"] . "'"; ?>/></div>
 </div>
 
 <div style="clear: both;padding-top:10px;">
-<label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="image_attributes">Optional attributes for each <code>&lt;img&gt;</code> tag:</label>
+<label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="image_template_html">HTML Template:<br/>(<code>%1</code> = title,<br /><code>%2</code> = image,<br /><code>%3</code> = caption)</label>
+<div style="float:left;"><textarea id="image_template_html" name="image_template_html" rows="4" cols="24" style="float:left;"><?php if ($randomimage_options["image_template_html"]) print stripslashes(htmlspecialchars($randomimage_options["image_template_html"])); ?></textarea>e.g.<br /><code>&lt;strong&gt;%1&lt;/strong&gt;&lt;br /&gt;<br />%2&lt;br /&gt;<br />&lt;em&gt;%3&lt;/em&gt;</code></div>
+</div>
+
+<div style="clear: both;padding-top:10px;">
+<label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="inter_image_html">HTML between images:</label>
+<div style="float:left;"><input type="text" id="inter_image_html" name="inter_image_html" size="12" <?php if (isset($randomimage_options["inter_image_html"])) print "value='" . stripslashes(htmlspecialchars($randomimage_options["inter_image_html"], ENT_QUOTES)) . "'"; ?>/>  e.g. <code>&lt;br /&gt;&lt;br /&gt;</code></div>
+</div>
+
+<div style="clear: both;padding-top:10px;">
+<label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="image_attributes">Optional attributes for <code>&lt;img&gt;</code> tags:</label>
 <div style="float:left;"><input type="text" id="image_attributes" name="image_attributes"  style="width:200px;" <?php if ($randomimage_options["image_attributes"]) print "value='" . stripslashes(htmlspecialchars($randomimage_options["image_attributes"], ENT_QUOTES)) . "'"; ?>/> e.g. <code>style="width:200px;"</code></div>
 </div>
 
@@ -248,6 +282,12 @@ function randomimage_configuration_page()
 
 </div>
 </div>
+
+<div style="clear: both;padding-top:10px;">
+<label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="image_class_match">String to match in the <code>&lt;img&gt;</code> <code>class</code>:</label>
+<div style="float:left;"><input type="text" id="image_class_match" name="image_class_match" style="width:200px;" <?php if ($randomimage_options["image_class_match"]) print "value='" . stripslashes(htmlspecialchars($randomimage_options["image_class_match"], ENT_QUOTES)) . "'"; ?>/> e.g. <code>randomimage</code></div>
+</div>
+
 
 <div style="clear: both;padding-top:10px;">
 <label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;" for="image_src_regex">Regex to match against the <code>&lt;img&gt;</code> <code>src</code>:</label>
@@ -282,12 +322,13 @@ function randomimage($show_post_title      = true,
                      $post_type            = "posts",
                      $inter_image_html     = "<br /><br />",
                      $category_filter      = "",
-                     $sort_images_randomly = true)
+                     $sort_images_randomly = true,
+                     $image_class_match    = "",
+                     $image_template_html  = "")
 {
     // get access to wordpress' database object
     global $wpdb, $wp_version;
     $debugging = false;
-
 
     if ($debugging) print "<strong>Random Image Debugging is On!</strong><br/>";
 
@@ -299,13 +340,13 @@ function randomimage($show_post_title      = true,
 
         $randomimage_options = get_randomimage_options();
 
-        $show_post_title      = $randomimage_options['show_post_title'];        
         $number_of_images     = $randomimage_options['number_of_images'];        
         $image_attributes     = $randomimage_options['image_attributes'];        
-        $show_alt_caption     = $randomimage_options['show_alt_caption'];        
         $image_src_regex      = $randomimage_options['image_src_regex'];        
         $inter_image_html     = $randomimage_options['inter_image_html'];
         $sort_images_randomly = $randomimage_options['sort_images_randomly'];
+        $image_class_match    = $randomimage_options['image_class_match'];
+        $image_template_html  = $randomimage_options['image_template_html'];
 
         if (!is_array($randomimage_options['category_filter']))
         {
@@ -327,10 +368,28 @@ function randomimage($show_post_title      = true,
         {
             $post_type = "both";
         }
+
     } 
     else 
     {
         if ($debugging) print "Configuration options (specified via function parameters):<br />";
+        
+        // if config options were specified via a function call, but no template was supplied,
+        // build a template from the show_post_title and show_alt_caption options.
+        if ($image_template_html == '') 
+        {
+            if ($show_post_title) 
+            {
+                $image_template_html .= "\n<strong>%1</strong><br />\n";
+            }
+
+            $image_template_html .= "%2";
+
+            if ($show_alt_caption) 
+            {
+                $image_template_html .= "<br />\n<em>%3</em>\n";
+            }
+        }
     }
     
     if ($debugging) 
@@ -465,6 +524,24 @@ function randomimage($show_post_title      = true,
                 continue;
             }
 
+            if ($image_class_match != "") 
+            {
+                // grab the class attribute and see if it exists, if not try again
+                preg_match("/class\s*=\s*(\"|')(.*?)\\1/i", $image_element, $image_classes);
+                $image_classes = $image_classes[2];
+
+                if ($image_classes == '') 
+                {
+                    continue;
+                }
+
+                $image_classes = explode(" ", $image_classes);
+                if (!in_array($image_class_match, $image_classes)) 
+                {
+                    continue;
+                }
+            }
+
             // add img src to array to check for dups
             $image_srcs[] = $image_src;
                
@@ -476,24 +553,22 @@ function randomimage($show_post_title      = true,
             {
                 $image_alt = "random image";
             }
-        
-            if ($show_post_title)
+
+            $image_html = $image_template_html;
+            $image_html = str_replace("%1", $post_title, $image_html);
+            $image_html = str_replace("%2", "<a href='$post_permalink'><img src='$image_src' alt='$image_alt' $image_attributes /></a>", $image_html);
+            
+            if ($image_alt != 'random image')
             {
-                print "\n<strong>" . $post_title . "</strong><br />\n";
+                $image_html = str_replace("%3", $image_alt, $image_html);
             }
 
-            print "<a href='$post_permalink'><img src='$image_src' alt='$image_alt' $image_attributes /></a>";
-            
-            if ($show_alt_caption && $image_alt != "random image")
-            {
-                print "<br />\n<em>$image_alt</em>";
-            }
+            print $image_html;
 
             $image_count++;
             
             if ($image_count == $number_of_images)
             {
-                print "\n";
                 return;
             }
             else
