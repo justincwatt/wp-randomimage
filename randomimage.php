@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 4.0
+Version: 4.0.1
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,9 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+4.0.1
+fixed bug in v4.0 that displayed %3 if the image had no alt attribute
 
 4.0
 converted html around each image to a template, allowing customization of caption and title position and markup
@@ -558,7 +561,11 @@ function randomimage($show_post_title      = true,
             $image_html = str_replace("%1", $post_title, $image_html);
             $image_html = str_replace("%2", "<a href='$post_permalink'><img src='$image_src' alt='$image_alt' $image_attributes /></a>", $image_html);
             
-            if ($image_alt != 'random image')
+            if ($image_alt == 'random image')
+            {
+                $image_html = str_replace("%3", '', $image_html);
+            } 
+            else 
             {
                 $image_html = str_replace("%3", $image_alt, $image_html);
             }
