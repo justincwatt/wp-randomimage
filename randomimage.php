@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: randomimage
-Version: 4.0.1
+Version: 4.1
 Plugin URI: http://justinsomnia.org/2005/09/random-image-plugin-for-wordpress/
 Description: Display a random image that links back to the post it came from
 Author: Justin Watt
@@ -17,6 +17,9 @@ INSTRUCTIONS
    (make sure to replace the square brackets [] above with angle brackets <>)
 
 CHANGELOG
+
+4.1
+updated to support WordPress 2.3's new db schema for categories and tags (still backwards compatible with 2.1 and 2.0 and maybe 1.5)
 
 4.0.1
 fixed bug in v4.0 that displayed %3 if the image had no alt attribute
@@ -266,17 +269,30 @@ function randomimage_configuration_page()
 </div>
 
 <div style="clear: both;padding-top:10px;">
-<label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;">Limit by categories:<br />(leave unchecked for all)</label>
+<label style="float:left;width:250px;text-align:right;padding-right:6px;padding-top:7px;">Limit by categories/tags:<br />(leave unchecked for all)</label>
 <div style="float:left;">
 
 <div style='overflow:auto;height:6em;width:200px;background-color:#efefef;border:1px solid #b2b2b2;padding:2px 0 0 3px;'>
 <?php
-
+    
+    
     // create WordPress-style category multi-select list
-    global $wpdb;
-    $categories = $wpdb->get_results("SELECT cat_ID, cat_name
-                                      FROM $wpdb->categories
-                                      ORDER BY cat_name");
+    global $wpdb, $wp_version;
+
+    if ($wp_version >= '2.3')
+    {
+        $categories = $wpdb->get_results("SELECT $wpdb->terms.term_id as cat_ID, $wpdb->terms.name as cat_name
+                                          FROM $wpdb->terms LEFT JOIN $wpdb->term_taxonomy on $wpdb->terms.term_id = $wpdb->term_taxonomy.term_id
+                                          WHERE $wpdb->term_taxonomy.taxonomy IN ('post_tag', 'category')
+                                          ORDER BY $wpdb->terms.name");
+    }
+    else 
+    { 
+        $categories = $wpdb->get_results("SELECT cat_ID, cat_name
+                                          FROM $wpdb->categories
+                                          ORDER BY cat_name");
+    }
+
     foreach ($categories as $category) {
         print "<label style='display:block;' for='category-$category->cat_ID'><input type='checkbox' value='$category->cat_ID' name='category_filter[]' id='category-$category->cat_ID'" . (in_array( $category->cat_ID, $randomimage_options["category_filter"] ) ? ' checked="checked"' : "") . " />" .  wp_specialchars($category->cat_name) . "</label>\n";
     }
@@ -445,17 +461,23 @@ function randomimage($show_post_title      = true,
     }
     // assuming $category_filter is a comma separated list of category ids,
     // modify query to join with post2cat table to select from only the chosen categories
+    $category_filter_join  = "";
+    $category_filter_sql   = "";
+    $category_filter_group = "";
     if ($category_filter != "")
     {
-        $category_filter_join  = "LEFT JOIN $wpdb->post2cat ON $wpdb->posts.ID = $wpdb->post2cat.post_id";
-        $category_filter_sql   = "AND $wpdb->post2cat.category_id IN ($category_filter)";   
-        $category_filter_group = "GROUP BY $wpdb->posts.ID";
-    }
-    else
-    {   
-        $category_filter_join  = "";
-        $category_filter_sql   = "";
-        $category_filter_group = "";
+        if ($wp_version >= '2.3')
+        {
+            $category_filter_join  = "LEFT JOIN $wpdb->term_relationships ON $wpdb->posts.ID = $wpdb->term_relationships.object_id LEFT JOIN $wpdb->term_taxonomy ON $wpdb->term_relationships.term_taxonomy_id = $wpdb->term_taxonomy.term_taxonomy_id";
+            $category_filter_sql   = "AND $wpdb->term_taxonomy.term_id IN ($category_filter)";   
+            $category_filter_group = "GROUP BY $wpdb->posts.ID";
+        }
+        else
+        {
+            $category_filter_join  = "LEFT JOIN $wpdb->post2cat ON $wpdb->posts.ID = $wpdb->post2cat.post_id";
+            $category_filter_sql   = "AND $wpdb->post2cat.category_id IN ($category_filter)";   
+            $category_filter_group = "GROUP BY $wpdb->posts.ID";
+        }
     }
     
     // by default we sort images randomly,
@@ -482,7 +504,7 @@ function randomimage($show_post_title      = true,
             ORDER BY $order_by_sql";
     $resultset = @mysql_query($sql, $wpdb->dbh);
     
-    if ($debugging) print "mysql errors: " . mysql_error($wpdb->dbh) . "<br/> SQL: " . htmlspecialchars($sql) . "<br/>";;
+    if ($debugging && mysql_error($wpdb->dbh)) print "mysql errors: " . mysql_error($wpdb->dbh) . "<br/> SQL: " . htmlspecialchars($sql) . "<br/>";;
     if ($debugging) print "elligible post count: " . @mysql_num_rows($resultset) . "<br/>"; 
     
     // keep track of multiple images to prevent displaying dups
